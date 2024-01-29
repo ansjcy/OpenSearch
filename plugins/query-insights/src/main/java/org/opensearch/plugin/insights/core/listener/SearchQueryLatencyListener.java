@@ -17,17 +17,23 @@ import org.opensearch.action.search.SearchRequestOperationsListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.plugin.insights.core.exporter.QueryInsightsExporterType;
 import org.opensearch.plugin.insights.core.service.TopQueriesByLatencyService;
+import org.opensearch.plugin.insights.rules.model.Attribute;
+import org.opensearch.plugin.insights.rules.model.Measurement;
+import org.opensearch.plugin.insights.rules.model.MetricType;
+import org.opensearch.plugin.insights.rules.model.SearchQueryRecord;
+import org.opensearch.plugin.insights.settings.QueryInsightsSettings;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_ENABLED;
-import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_ENABLED;
-import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_IDENTIFIER;
-import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_INTERVAL;
-import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_TYPE;
+import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_ENABLED;
+import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_IDENTIFIER;
+import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_INTERVAL;
 import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_SIZE;
 import static org.opensearch.plugin.insights.settings.QueryInsightsSettings.TOP_N_LATENCY_QUERIES_WINDOW_SIZE;
 
@@ -52,7 +58,9 @@ public final class SearchQueryLatencyListener extends SearchRequestOperationsLis
     @Inject
     public SearchQueryLatencyListener(ClusterService clusterService, TopQueriesByLatencyService topQueriesByLatencyService) {
         this.topQueriesByLatencyService = topQueriesByLatencyService;
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(TOP_N_LATENCY_QUERIES_ENABLED, this::setEnabled);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(
+            TOP_N_LATENCY_QUERIES_ENABLED,
+            v -> this.setEnabled(MetricType.LATENCY, v));
         clusterService.getClusterSettings()
             .addSettingsUpdateConsumer(
                 TOP_N_LATENCY_QUERIES_SIZE,
@@ -65,28 +73,58 @@ public final class SearchQueryLatencyListener extends SearchRequestOperationsLis
                 this.topQueriesByLatencyService::setWindowSize,
                 this.topQueriesByLatencyService::validateWindowSize
             );
-        clusterService.getClusterSettings()
-            .addSettingsUpdateConsumer(TOP_N_LATENCY_QUERIES_EXPORTER_TYPE, this.topQueriesByLatencyService::setExporterType);
+
         clusterService.getClusterSettings()
             .addSettingsUpdateConsumer(
-                TOP_N_LATENCY_QUERIES_EXPORTER_INTERVAL,
-                this.topQueriesByLatencyService::setExportInterval,
+                TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_INTERVAL,
+                v -> this.topQueriesByLatencyService.resetExporter(
+                    MetricType.LATENCY,
+                    QueryInsightsExporterType.LOCAL_INDEX,
+                    clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_IDENTIFIER),
+                    v,
+                    clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_ENABLED)
+                ),
                 this.topQueriesByLatencyService::validateExportInterval
             );
         clusterService.getClusterSettings()
-            .addSettingsUpdateConsumer(TOP_N_LATENCY_QUERIES_EXPORTER_IDENTIFIER, this.topQueriesByLatencyService::setExporterIdentifier);
+            .addSettingsUpdateConsumer(
+                TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_IDENTIFIER,
+                v -> this.topQueriesByLatencyService.resetExporter(
+                    MetricType.LATENCY,
+                    QueryInsightsExporterType.LOCAL_INDEX,
+                    v,
+                    clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_INTERVAL),
+                    clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_ENABLED)
+            ));
+
         clusterService.getClusterSettings()
-            .addSettingsUpdateConsumer(TOP_N_LATENCY_QUERIES_EXPORTER_ENABLED, this.topQueriesByLatencyService::setExporterEnabled);
+            .addSettingsUpdateConsumer(
+                TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_ENABLED,
+                v -> this.topQueriesByLatencyService.resetExporter(
+                    MetricType.LATENCY,
+                    QueryInsightsExporterType.LOCAL_INDEX,
+                    clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_IDENTIFIER),
+                    clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_INTERVAL),
+                    v
+                ));
 
         this.setEnabled(clusterService.getClusterSettings().get(TOP_N_LATENCY_QUERIES_ENABLED));
         this.topQueriesByLatencyService.setTopNSize(clusterService.getClusterSettings().get(TOP_N_LATENCY_QUERIES_SIZE));
         this.topQueriesByLatencyService.setWindowSize(clusterService.getClusterSettings().get(TOP_N_LATENCY_QUERIES_WINDOW_SIZE));
     }
 
-    @Override
-    public void setEnabled(boolean enabled) {
-        super.setEnabled(enabled);
-        this.topQueriesByLatencyService.setEnableCollect(enabled);
+    public void setEnabled(MetricType metricType, boolean enabled) {
+        this.topQueriesByLatencyService.setEnableCollect(metricType, enabled);
+        if (!enabled) {
+            for (MetricType t : MetricType.allMetricTypes()) {
+                if (this.topQueriesByLatencyService.getEnableCollect(t)) {
+                    return;
+                }
+            }
+            super.setEnabled(false);
+        } else {
+            super.setEnabled(true);
+        }
     }
 
     @Override
@@ -110,16 +148,33 @@ public final class SearchQueryLatencyListener extends SearchRequestOperationsLis
     public void onRequestEnd(SearchPhaseContext context, SearchRequestContext searchRequestContext) {
         SearchRequest request = context.getRequest();
         try {
-            topQueriesByLatencyService.ingestQueryData(
-                request.getOrCreateAbsoluteStartMillis(),
-                request.searchType(),
-                request.source().toString(FORMAT_PARAMS),
-                context.getNumShards(),
-                request.indices(),
-                new HashMap<>(),
-                searchRequestContext.phaseTookMap(),
-                System.nanoTime() - searchRequestContext.getAbsoluteStartNanos()
-            );
+            if (topQueriesByLatencyService.getEnableCollect(MetricType.LATENCY)) {
+                Map<MetricType, Measurement<Number>> measurements = Map.of(
+                    MetricType.LATENCY, new Measurement<>(MetricType.LATENCY.name(), System.nanoTime() - searchRequestContext.getAbsoluteStartNanos())
+                );
+                Map<Attribute, Object> attributes = new HashMap<>();
+                attributes.put(Attribute.SEARCH_TYPE, request.searchType());
+                attributes.put(Attribute.SOURCE, request.source().toString(FORMAT_PARAMS));
+                attributes.put(Attribute.TOTAL_SHARDS, context.getNumShards());
+                attributes.put(Attribute.INDICES, request.indices());
+                attributes.put(Attribute.PHASE_LATENCY_MAP, searchRequestContext.phaseTookMap());
+                SearchQueryRecord record = new SearchQueryRecord(
+                    request.getOrCreateAbsoluteStartMillis(),
+                    measurements,
+                    attributes
+                );
+                topQueriesByLatencyService.addRecord(MetricType.LATENCY, record);
+            }
+//            topQueriesByLatencyService.ingestQueryData(
+//                request.getOrCreateAbsoluteStartMillis(),
+//                request.searchType(),
+//                request.source().toString(FORMAT_PARAMS),
+//                context.getNumShards(),
+//                request.indices(),
+//                new HashMap<>(),
+//                searchRequestContext.phaseTookMap(),
+//                System.nanoTime() - searchRequestContext.getAbsoluteStartNanos()
+//            );
         } catch (Exception e) {
             log.error(String.format(Locale.ROOT, "fail to ingest query insight data, error: %s", e));
         }

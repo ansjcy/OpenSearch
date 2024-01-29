@@ -21,6 +21,7 @@ import org.opensearch.plugin.insights.rules.action.top_queries.TopQueries;
 import org.opensearch.plugin.insights.rules.action.top_queries.TopQueriesAction;
 import org.opensearch.plugin.insights.rules.action.top_queries.TopQueriesRequest;
 import org.opensearch.plugin.insights.rules.action.top_queries.TopQueriesResponse;
+import org.opensearch.plugin.insights.rules.model.MetricType;
 import org.opensearch.plugin.insights.settings.QueryInsightsSettings;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportRequest;
@@ -85,7 +86,8 @@ public class TransportTopQueriesAction extends TransportNodesAction<
                 clusterService.getClusterName(),
                 responses,
                 failures,
-                clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_SIZE)
+                clusterService.getClusterSettings().get(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_SIZE),
+                MetricType.LATENCY
             );
         } else {
             throw new OpenSearchException(String.format(Locale.ROOT, "invalid metric type %s", topQueriesRequest.getMetricType()));
@@ -106,7 +108,10 @@ public class TransportTopQueriesAction extends TransportNodesAction<
     protected TopQueries nodeOperation(NodeRequest nodeRequest) {
         TopQueriesRequest request = nodeRequest.request;
         if (request.getMetricType() == TopQueriesRequest.Metric.LATENCY) {
-            return new TopQueries(clusterService.localNode(), topQueriesByLatencyService.getQueryData());
+            return new TopQueries(
+                clusterService.localNode(),
+                topQueriesByLatencyService.getTopNRecords(MetricType.LATENCY)
+            );
         } else {
             throw new OpenSearchException(String.format(Locale.ROOT, "invalid metric type %s", request.getMetricType()));
         }

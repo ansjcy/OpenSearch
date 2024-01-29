@@ -97,10 +97,9 @@ public class QueryInsightsPlugin extends Plugin implements ActionPlugin {
             QueryInsightsSettings.TOP_N_LATENCY_QUERIES_ENABLED,
             QueryInsightsSettings.TOP_N_LATENCY_QUERIES_SIZE,
             QueryInsightsSettings.TOP_N_LATENCY_QUERIES_WINDOW_SIZE,
-            QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_ENABLED,
-            QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_TYPE,
-            QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_INTERVAL,
-            QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_IDENTIFIER
+            QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_ENABLED,
+            QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_INTERVAL,
+            QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_IDENTIFIER
         );
     }
 }

@@ -25,6 +25,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.plugin.insights.rules.model.MetricType;
 import org.opensearch.plugin.insights.rules.model.SearchQueryRecord;
 
 import java.io.IOException;
@@ -41,7 +42,7 @@ import java.util.Objects;
  *
  * @opensearch.internal
  */
-public class QueryInsightsLocalIndexExporter<T extends SearchQueryRecord<?>> extends QueryInsightsExporter<T> {
+public class QueryInsightsLocalIndexExporter extends QueryInsightsExporter {
     private static final Logger log = LogManager.getLogger(QueryInsightsLocalIndexExporter.class);
     private static final int INDEX_TIMEOUT = 60;
 
@@ -62,9 +63,10 @@ public class QueryInsightsLocalIndexExporter<T extends SearchQueryRecord<?>> ext
         ClusterService clusterService,
         Client client,
         String localIndexName,
+        TimeValue exportInterval,
         InputStream localIndexMapping
     ) {
-        super(localIndexName);
+        super(localIndexName, exportInterval);
         this.clusterService = clusterService;
         this.client = client;
         this.localIndexMapping = localIndexMapping;
@@ -77,7 +79,7 @@ public class QueryInsightsLocalIndexExporter<T extends SearchQueryRecord<?>> ext
      * @throws IOException if an error occurs
      */
     @Override
-    public void export(List<T> records) throws IOException {
+    public void export(List<SearchQueryRecord> records) throws IOException {
         if (records.size() == 0) {
             return;
         }
@@ -153,12 +155,14 @@ public class QueryInsightsLocalIndexExporter<T extends SearchQueryRecord<?>> ext
      * @param records the data to export
      * @throws IOException if an error occurs
      */
-    private void bulkRecord(List<T> records) throws IOException {
+    private void bulkRecord(List<SearchQueryRecord> records) throws IOException {
         BulkRequest bulkRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
             .timeout(TimeValue.timeValueSeconds(INDEX_TIMEOUT));
-        for (T record : records) {
+        for (SearchQueryRecord record : records) {
             bulkRequest.add(
+//                new IndexRequest(getIdentifier()).source(record)
                 new IndexRequest(getIdentifier()).source(record.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS))
+//                new IndexRequest(getIdentifier()).source(record.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS))
             );
         }
         client.bulk(bulkRequest, new ActionListener<>() {

@@ -35,8 +35,8 @@ public class TopQueriesTests extends OpenSearchTestCase {
      * checks all properties that are expected to be unchanged.
      */
     private void assertExpected(TopQueries topQueries, TopQueries readTopQueries) throws IOException {
-        for (int i = 0; i < topQueries.getLatencyRecords().size(); i++) {
-            QueryInsightsTestUtils.compareJson(topQueries.getLatencyRecords().get(i), readTopQueries.getLatencyRecords().get(i));
+        for (int i = 0; i < topQueries.getTopQueriesRecord().size(); i++) {
+            QueryInsightsTestUtils.compareJson(topQueries.getTopQueriesRecord().get(i), readTopQueries.getTopQueriesRecord().get(i));
         }
     }
 }

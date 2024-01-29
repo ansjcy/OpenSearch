@@ -73,10 +73,10 @@ public class TransportTopQueriesActionTests extends OpenSearchTestCase {
         clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_ENABLED);
         clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_SIZE);
         clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_WINDOW_SIZE);
-        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_ENABLED);
-        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_TYPE);
-        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_INTERVAL);
-        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_EXPORTER_IDENTIFIER);
+        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_ENABLED);
+        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_TYPE);
+        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_INTERVAL);
+        clusterSettings.registerSetting(QueryInsightsSettings.TOP_N_LATENCY_QUERIES_LOCAL_INDEX_EXPORTER_IDENTIFIER);
     }
 
     public void testNewResponse() {

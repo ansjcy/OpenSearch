@@ -122,7 +122,7 @@ public class QueryInsightsPluginTransportIT extends OpenSearchIntegTestCase {
         TopQueriesResponse response = OpenSearchIntegTestCase.client().execute(TopQueriesAction.INSTANCE, request).actionGet();
         Assert.assertEquals(0, response.failures().size());
         Assert.assertEquals(TOTAL_NUMBER_OF_NODES, response.getNodes().size());
-        Assert.assertEquals(TOTAL_SEARCH_REQUESTS, response.getNodes().stream().mapToInt(o -> o.getLatencyRecords().size()).sum());
+        Assert.assertEquals(TOTAL_SEARCH_REQUESTS, response.getNodes().stream().mapToInt(o -> o.getTopQueriesRecord().size()).sum());
 
         internalCluster().stopAllNodes();
     }
@@ -167,7 +167,7 @@ public class QueryInsightsPluginTransportIT extends OpenSearchIntegTestCase {
         Assert.assertEquals(0, response.failures().size());
         Assert.assertEquals(TOTAL_NUMBER_OF_NODES, response.getNodes().size());
         // TODO: this should be 1 after changing to cluster level top N.
-        Assert.assertEquals(2, response.getNodes().stream().mapToInt(o -> o.getLatencyRecords().size()).sum());
+        Assert.assertEquals(2, response.getNodes().stream().mapToInt(o -> o.getTopQueriesRecord().size()).sum());
 
         internalCluster().stopAllNodes();
     }
@@ -211,7 +211,7 @@ public class QueryInsightsPluginTransportIT extends OpenSearchIntegTestCase {
         TopQueriesResponse response = OpenSearchIntegTestCase.client().execute(TopQueriesAction.INSTANCE, request).actionGet();
         Assert.assertEquals(0, response.failures().size());
         Assert.assertEquals(TOTAL_NUMBER_OF_NODES, response.getNodes().size());
-        Assert.assertEquals(0, response.getNodes().stream().mapToInt(o -> o.getLatencyRecords().size()).sum());
+        Assert.assertEquals(0, response.getNodes().stream().mapToInt(o -> o.getTopQueriesRecord().size()).sum());
 
         internalCluster().stopAllNodes();
     }
