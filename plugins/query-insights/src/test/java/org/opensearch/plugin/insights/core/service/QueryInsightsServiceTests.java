@@ -30,7 +30,7 @@ public class QueryInsightsServiceTests extends OpenSearchTestCase {
         queryInsightsService = new QueryInsightsService(threadPool);
         queryInsightsService.enableCollection(MetricType.LATENCY, true);
         queryInsightsService.enableCollection(MetricType.CPU, true);
-        queryInsightsService.enableCollection(MetricType.JVM, true);
+        queryInsightsService.enableCollection(MetricType.MEMORY, true);
     }
 
     public void testAddRecordToLimitAndDrain() {

@@ -877,37 +877,6 @@ public class Node implements Closeable {
             );
 
             final ViewService viewService = new ViewService(clusterService, client, null);
-
-            Collection<Object> pluginComponents = pluginsService.filterPlugins(Plugin.class)
-                .stream()
-                .flatMap(
-                    p -> p.createComponents(
-                        client,
-                        clusterService,
-                        threadPool,
-                        resourceWatcherService,
-                        scriptService,
-                        xContentRegistry,
-                        environment,
-                        nodeEnvironment,
-                        namedWriteableRegistry,
-                        clusterModule.getIndexNameExpressionResolver(),
-                        repositoriesServiceReference::get
-                    ).stream()
-                )
-                .collect(Collectors.toList());
-
-            // register all standard SearchRequestOperationsCompositeListenerFactory to the SearchRequestOperationsCompositeListenerFactory
-            final SearchRequestOperationsCompositeListenerFactory searchRequestOperationsCompositeListenerFactory =
-                new SearchRequestOperationsCompositeListenerFactory(
-                    Stream.concat(
-                        Stream.of(searchRequestStats, searchRequestSlowLog),
-                        pluginComponents.stream()
-                            .filter(p -> p instanceof SearchRequestOperationsListener)
-                            .map(p -> (SearchRequestOperationsListener) p)
-                    ).toArray(SearchRequestOperationsListener[]::new)
-                );
-
             ActionModule actionModule = new ActionModule(
                 settings,
                 clusterModule.getIndexNameExpressionResolver(),
@@ -1047,6 +1016,37 @@ public class Node implements Closeable {
                 threadPool,
                 transportService.getTaskManager()
             );
+
+            Collection<Object> pluginComponents = pluginsService.filterPlugins(Plugin.class)
+                .stream()
+                .flatMap(
+                    p -> p.createComponents(
+                        client,
+                        clusterService,
+                        threadPool,
+                        resourceWatcherService,
+                        scriptService,
+                        xContentRegistry,
+                        environment,
+                        nodeEnvironment,
+                        namedWriteableRegistry,
+                        clusterModule.getIndexNameExpressionResolver(),
+                        repositoriesServiceReference::get,
+                        taskResourceTrackingService
+                    ).stream()
+                )
+                .collect(Collectors.toList());
+
+            // register all standard SearchRequestOperationsCompositeListenerFactory to the SearchRequestOperationsCompositeListenerFactory
+            final SearchRequestOperationsCompositeListenerFactory searchRequestOperationsCompositeListenerFactory =
+                new SearchRequestOperationsCompositeListenerFactory(
+                    Stream.concat(
+                        Stream.of(searchRequestStats, searchRequestSlowLog),
+                        pluginComponents.stream()
+                            .filter(p -> p instanceof SearchRequestOperationsListener)
+                            .map(p -> (SearchRequestOperationsListener) p)
+                    ).toArray(SearchRequestOperationsListener[]::new)
+                );
 
             final SegmentReplicationStatsTracker segmentReplicationStatsTracker = new SegmentReplicationStatsTracker(indicesService);
             RepositoriesModule repositoriesModule = new RepositoriesModule(

@@ -10,6 +10,8 @@ package org.opensearch.plugin.insights.core.service;
 
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.lifecycle.AbstractLifecycleComponent;
+import org.opensearch.core.tasks.resourcetracker.TaskResourceInfo;
+import org.opensearch.plugin.insights.rules.model.Attribute;
 import org.opensearch.plugin.insights.rules.model.MetricType;
 import org.opensearch.plugin.insights.rules.model.SearchQueryRecord;
 import org.opensearch.plugin.insights.settings.QueryInsightsSettings;
@@ -21,7 +23,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * Service responsible for gathering, analyzing, storing and exporting
@@ -49,6 +54,18 @@ public class QueryInsightsService extends AbstractLifecycleComponent {
      * The internal thread-safe queue to ingest the search query data and subsequently forward to processors
      */
     private final LinkedBlockingQueue<SearchQueryRecord> queryRecordsQueue;
+
+    /**
+     * The internal thread-safe queue to ingest the task-level resource usage data
+     */
+    public final LinkedBlockingQueue<TaskResourceInfo> taskRecordsQueue = new LinkedBlockingQueue<>();
+
+    /**
+     * This map keeps track of the status of tasks associated with a query.
+     * - The value of the entry is 0: all tasks associated with the query has completed.
+     * - The value of the entry is greater than 0: Some tasks related to this query have not been completed yet.
+     */
+    public final ConcurrentHashMap<Long, AtomicInteger> taskStatusMap = new ConcurrentHashMap<>();
 
     /**
      * Holds a reference to delayed operation {@link Scheduler.Cancellable} so it can be cancelled when
@@ -102,15 +119,53 @@ public class QueryInsightsService extends AbstractLifecycleComponent {
      * Drain the queryRecordsQueue into internal stores and services
      */
     public void drainRecords() {
-        final List<SearchQueryRecord> records = new ArrayList<>();
-        queryRecordsQueue.drainTo(records);
-        records.sort(Comparator.comparingLong(SearchQueryRecord::getTimestamp));
+        final List<SearchQueryRecord> queryRecords = new ArrayList<>();
+        final List<TaskResourceInfo> taskRecords = new ArrayList<>();
+        queryRecordsQueue.drainTo(queryRecords);
+        taskRecordsQueue.drainTo(taskRecords);
+        final List<SearchQueryRecord> finishedQueryRecord = correlateTasks(queryRecords, taskRecords);
+        finishedQueryRecord.sort(Comparator.comparingLong(SearchQueryRecord::getTimestamp));
         for (MetricType metricType : MetricType.allMetricTypes()) {
             if (enableCollect.get(metricType)) {
                 // ingest the records into topQueriesService
-                topQueriesServices.get(metricType).consumeRecords(records);
+                topQueriesServices.get(metricType).consumeRecords(finishedQueryRecord);
             }
         }
+    }
+
+    private List<SearchQueryRecord> correlateTasks(List<SearchQueryRecord> queryRecords, List<TaskResourceInfo> taskRecords) {
+        List<SearchQueryRecord> finishedRecords = new ArrayList<>();
+        // group taskRecords by parent task
+        Map<Long, List<TaskResourceInfo>> taskIdToResources = taskRecords.stream()
+            .collect(Collectors.groupingBy(TaskResourceInfo::getParentTaskId, HashMap::new, Collectors.toList()));
+
+        for (SearchQueryRecord record : queryRecords) {
+            long taskId = (long) record.getAttributes().get(Attribute.TASK_ID);
+            if (!taskStatusMap.containsKey(taskId)) {
+                // write back since there's no task information.
+                queryRecordsQueue.offer(record);
+                continue;
+            }
+            // parent task has finished
+            if (taskStatusMap.get(taskId).get() == 0) {
+                long cpuUsage = taskIdToResources.get(taskId)
+                    .stream()
+                    .map(r -> r.getTaskResourceUsage().getCpuTimeInNanos())
+                    .reduce(0L, Long::sum);
+                long memUsage = taskIdToResources.get(taskId)
+                    .stream()
+                    .map(r -> r.getTaskResourceUsage().getMemoryInBytes())
+                    .reduce(0L, Long::sum);
+                record.addMeasurement(MetricType.CPU, cpuUsage);
+                record.addMeasurement(MetricType.MEMORY, memUsage);
+                finishedRecords.add(record);
+            } else {
+                // write back since the task has not complete
+                queryRecordsQueue.offer(record);
+                taskRecordsQueue.addAll(taskIdToResources.get(taskId));
+            }
+        }
+        return finishedRecords;
     }
 
     /**

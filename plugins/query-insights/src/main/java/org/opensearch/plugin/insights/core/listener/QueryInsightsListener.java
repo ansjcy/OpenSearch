@@ -16,6 +16,7 @@ import org.opensearch.action.search.SearchRequestContext;
 import org.opensearch.action.search.SearchRequestOperationsListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.core.tasks.resourcetracker.TaskResourceInfo;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.plugin.insights.core.service.QueryInsightsService;
 import org.opensearch.plugin.insights.rules.model.Attribute;
@@ -24,6 +25,7 @@ import org.opensearch.plugin.insights.rules.model.SearchQueryRecord;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -113,7 +115,11 @@ public final class QueryInsightsListener extends SearchRequestOperationsListener
     public void onPhaseStart(SearchPhaseContext context) {}
 
     @Override
-    public void onPhaseEnd(SearchPhaseContext context, SearchRequestContext searchRequestContext) {}
+    public void onPhaseEnd(SearchPhaseContext context, SearchRequestContext searchRequestContext) {
+        // Save task-level resource usages for calculating query-level resource usages later
+        List<TaskResourceInfo> usages = context.getCurrentPhase().getPhaseResourceUsageFromResults();
+        this.queryInsightsService.taskRecordsQueue.addAll(usages);
+    }
 
     @Override
     public void onPhaseFailure(SearchPhaseContext context, Throwable cause) {}
@@ -123,6 +129,11 @@ public final class QueryInsightsListener extends SearchRequestOperationsListener
 
     @Override
     public void onRequestEnd(final SearchPhaseContext context, final SearchRequestContext searchRequestContext) {
+        long parentTaskId = context.getTask().getParentTaskId().getId();
+        // If the current task is a parent task
+        if (parentTaskId == -1) {
+            parentTaskId = context.getTask().getId();
+        }
         final SearchRequest request = context.getRequest();
         try {
             Map<MetricType, Number> measurements = new HashMap<>();
@@ -138,6 +149,7 @@ public final class QueryInsightsListener extends SearchRequestOperationsListener
             attributes.put(Attribute.TOTAL_SHARDS, context.getNumShards());
             attributes.put(Attribute.INDICES, request.indices());
             attributes.put(Attribute.PHASE_LATENCY_MAP, searchRequestContext.phaseTookMap());
+            attributes.put(Attribute.TASK_ID, parentTaskId);
             SearchQueryRecord record = new SearchQueryRecord(request.getOrCreateAbsoluteStartMillis(), measurements, attributes);
             queryInsightsService.addRecord(record);
         } catch (Exception e) {

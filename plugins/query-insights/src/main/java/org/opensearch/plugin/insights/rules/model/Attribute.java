@@ -43,7 +43,11 @@ public enum Attribute {
     /**
      * The node id for this request
      */
-    NODE_ID;
+    NODE_ID,
+    /**
+     * The coordinator node task id associated with this request
+     */
+    TASK_ID;
 
     /**
      * Read an Attribute from a StreamInput
