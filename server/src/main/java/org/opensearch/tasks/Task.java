@@ -33,6 +33,7 @@
 package org.opensearch.tasks;
 
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.action.search.SearchTask;
 import org.opensearch.common.annotation.PublicApi;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.action.NotifyOnceListener;
@@ -178,9 +179,16 @@ public class Task {
         String description = null;
         Task.Status status = null;
         TaskResourceStats resourceStats = null;
+        Object searchSource = null;
         if (detailed) {
             description = getDescription();
             status = getStatus();
+            if (this instanceof SearchTask) {
+                SearchTask searchTask = (SearchTask) this;
+                if (searchTask.getSourceBuilder() != null) {
+                    searchSource = searchTask.getSourceBuilder();
+                }
+            }
         }
         if (excludeStats == false) {
             resourceStats = new TaskResourceStats(new HashMap<>() {
@@ -192,20 +200,27 @@ public class Task {
                 }
             }, getThreadUsage());
         }
-        return taskInfo(localNodeId, description, status, resourceStats);
+        return taskInfo(localNodeId, description, status, resourceStats, searchSource);
     }
 
     /**
      * Build a {@link TaskInfo} for this task without resource stats.
      */
     protected final TaskInfo taskInfo(String localNodeId, String description, Status status) {
-        return taskInfo(localNodeId, description, status, null);
+        return taskInfo(localNodeId, description, status, null, null);
     }
 
     /**
      * Build a proper {@link TaskInfo} for this task.
      */
     protected final TaskInfo taskInfo(String localNodeId, String description, Status status, TaskResourceStats resourceStats) {
+        return taskInfo(localNodeId, description, status, resourceStats, null);
+    }
+
+    /**
+     * Build a proper {@link TaskInfo} for this task.
+     */
+    protected final TaskInfo taskInfo(String localNodeId, String description, Status status, TaskResourceStats resourceStats, Object searchSource) {
         boolean cancelled = this instanceof CancellableTask && ((CancellableTask) this).isCancelled();
         Long cancellationStartTime = null;
         if (cancelled) {
@@ -224,7 +239,8 @@ public class Task {
             parentTask,
             headers,
             resourceStats,
-            cancellationStartTime
+            cancellationStartTime,
+            searchSource
         );
     }
 

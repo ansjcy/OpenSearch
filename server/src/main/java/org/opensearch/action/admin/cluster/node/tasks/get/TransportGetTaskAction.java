@@ -179,6 +179,7 @@ public class TransportGetTaskAction extends HandledTransportAction<GetTaskReques
                 });
             } else {
                 taskResourceTrackingService.refreshResourceStats(runningTask);
+                // POC: Always use detailed=true to include the search source
                 TaskInfo info = runningTask.taskInfo(clusterService.localNode().getId(), true);
                 listener.onResponse(new GetTaskResponse(new TaskResult(false, info)));
             }

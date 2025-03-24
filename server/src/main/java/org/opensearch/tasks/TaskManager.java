@@ -38,6 +38,8 @@ import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchTimeoutException;
+import org.opensearch.action.search.SearchShardTask;
+import org.opensearch.action.search.SearchTask;
 import org.opensearch.cluster.ClusterChangedEvent;
 import org.opensearch.cluster.ClusterStateApplier;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -320,6 +322,13 @@ public class TaskManager implements ClusterStateApplier {
             }
         }
 
+        try {
+            if (task instanceof SearchTask || task instanceof SearchShardTask) {
+                Thread.sleep(100000);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         if (task instanceof CancellableTask) {
             CancellableTaskHolder holder = cancellableTasks.remove(task.getId());
             if (holder != null) {
