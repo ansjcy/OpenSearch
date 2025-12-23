@@ -100,7 +100,9 @@ public class TransportListTasksAction extends TransportTasksAction<Task, ListTas
 
     @Override
     protected void taskOperation(ListTasksRequest request, Task task, ActionListener<TaskInfo> listener) {
-        listener.onResponse(task.taskInfo(clusterService.localNode().getId(), request.getDetailed()));
+        // Always include detailed information if this is a search task to get the query source
+        boolean detailed = request.getDetailed() || task instanceof org.opensearch.action.search.SearchTask;
+        listener.onResponse(task.taskInfo(clusterService.localNode().getId(), detailed));
     }
 
     @Override
